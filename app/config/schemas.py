@@ -19,6 +19,14 @@ class ProductCreate(BaseModel):
     stock: int
     prices: List[PriceCreate]  
 
+class ProductUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    stock: Optional[int] = None
+    prices: Optional[List[PriceCreate]] = None  # <-- rend la liste de prix optionnelle
+
+
+
 class Product(BaseModel):
     id: int
     name: str

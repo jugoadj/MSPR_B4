@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from urllib.parse import quote
+from contextlib import contextmanager
 
 DATABASE_URL = "postgresql://postgres:196810@localhost:5432/msprB4Db"
 
@@ -8,14 +9,28 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
-# TEST DE CONNEXION À LA BASE DE DONNÉES
+# Nouvelle implémentation plus robuste
+@contextmanager
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
 def test_connection():
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
             print("✅ Connexion à la base de données réussie.")
+        return True
     except Exception as e:
-        print("❌ Erreur de connexion :", e)
+        print(f"❌ Erreur de connexion : {e}")
+        return False
 
-# Appel au test
-test_connection()
+# Test automatique seulement si exécuté directement
+if __name__ == "__main__":
+    test_connection()
