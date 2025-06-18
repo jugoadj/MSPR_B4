@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
@@ -10,7 +10,8 @@ class Price(BaseModel):
     amount: float
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        orm_mode = True
 
 class ProductCreate(BaseModel):
     name: str
@@ -22,7 +23,9 @@ class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     stock: Optional[int] = None
-    prices: Optional[List[PriceCreate]] = None  # prix optionnels
+    prices: Optional[List[PriceCreate]] = None  # <-- rend la liste de prix optionnelle
+
+
 
 class Product(BaseModel):
     id: int
@@ -32,4 +35,5 @@ class Product(BaseModel):
     created_at: datetime
     prices: List[Price]
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        orm_mode = True

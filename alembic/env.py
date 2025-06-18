@@ -1,13 +1,18 @@
+import sys
+import os
 from logging.config import fileConfig
+
+# Ajouter le dossier racine du projet dans sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
-from config.database import Base
-from models.product import Product
-
+from app.config.database import Base
+from app.models.product import Product
 
 from alembic import context
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
