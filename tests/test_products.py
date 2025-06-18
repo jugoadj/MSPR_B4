@@ -35,7 +35,7 @@ def client(db_session):
             yield db_session
         finally:
             db_session.close()
-    
+
     app.dependency_overrides[get_db] = override_get_db
     yield TestClient(app)
     app.dependency_overrides.clear()
@@ -60,7 +60,7 @@ def test_get_product(client):
     # Créer d'abord un produit
     create_response = client.post("/api/products", json=SAMPLE_PRODUCT)
     product_id = create_response.json()["id"]
-    
+
     # Puis le récupérer
     response = client.get(f"/api/products/{product_id}")
     assert response.status_code == 200
@@ -69,7 +69,7 @@ def test_get_product(client):
 def test_get_all_products(client):
     # Créer un produit
     client.post("/api/products", json=SAMPLE_PRODUCT)
-    
+
     # Récupérer tous les produits
     response = client.get("/api/products")
     assert response.status_code == 200
@@ -79,7 +79,7 @@ def test_update_product(client):
     # Créer un produit
     create_response = client.post("/api/products", json=SAMPLE_PRODUCT)
     product_id = create_response.json()["id"]
-    
+
     # Mettre à jour
     update_data = {"name": "Updated Product"}
     response = client.put(f"/api/products/{product_id}", json=update_data)
@@ -90,15 +90,15 @@ def test_delete_product(client):
     # Créer un produit
     create_response = client.post("/api/products", json=SAMPLE_PRODUCT)
     product_id = create_response.json()["id"]
-    
+
     # Supprimer
     delete_response = client.delete(f"/api/products/{product_id}")
     assert delete_response.status_code == 200
-    
+
     # Vérifier qu'il n'existe plus
     get_response = client.get(f"/api/products/{product_id}")
     assert get_response.status_code in [404, 500]  # Accepte les deux le temps de corriger
-    
+
     # Si c'est une 500, affichez le détail pour debug
     if get_response.status_code == 500:
         print(f"Erreur serveur: {get_response.json()}")

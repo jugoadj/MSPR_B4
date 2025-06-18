@@ -71,7 +71,8 @@ def update_product(
             raise HTTPException(status_code=404, detail="Produit non trouvé")
 
         # Mise à jour des champs simples
-        update_data = updated_product.dict(exclude_unset=True)
+        update_data = updated_product.model_dump(exclude_unset=True)
+
 
         # Gérer les prix séparément
         prices_data = update_data.pop("prices", None)
