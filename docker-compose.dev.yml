@@ -1,0 +1,8 @@
+version: '3'
+services:
+  produit-ms:
+    image: votredockerhub/produit-ms:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=dev

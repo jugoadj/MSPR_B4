@@ -6,6 +6,12 @@ from ..models.price import Price as PriceModel
 from typing import List
 from ..config.schemas import ProductCreate, Product as ProductSchema, Price as PriceSchema, ProductUpdate
 
+from ..middelware.auth import verify_token  
+
+router = APIRouter(
+    dependencies=[Depends(verify_token)]  
+)
+
 router = APIRouter()
 
 def get_db():
@@ -14,6 +20,9 @@ def get_db():
         yield db
     finally:
         db.close()
+
+NO_PRODUCT_FOUND_MSG = "produit trouvé"
+
 
 @router.post("/products", response_model=ProductSchema)
 def create_product(product_data: ProductCreate = Body(...), db: Session = Depends(get_db)):
@@ -44,7 +53,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     try:
         product = db.query(ProductModel).options(joinedload(ProductModel.prices)).filter(ProductModel.id == product_id).first()
         if not product:
-            raise HTTPException(status_code=404, detail="Produit non trouvé")
+            raise HTTPException(status_code=404, detail=NO_PRODUCT_FOUND_MSG)
         return product
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -68,7 +77,7 @@ def update_product(
     try:
         product = db.query(ProductModel).options(joinedload(ProductModel.prices)).filter(ProductModel.id == product_id).first()
         if not product:
-            raise HTTPException(status_code=404, detail="Produit non trouvé")
+            raise HTTPException(status_code=404, detail=NO_PRODUCT_FOUND_MSG)
 
         # Mise à jour des champs simples
         update_data = updated_product.dict(exclude_unset=True)
@@ -104,7 +113,7 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
     try:
         product = db.query(ProductModel).filter(ProductModel.id == product_id).first()
         if not product:
-            raise HTTPException(status_code=404, detail="Produit non trouvé")
+            raise HTTPException(status_code=404, detail=NO_PRODUCT_FOUND_MSG)
 
         db.delete(product)
         db.commit()
