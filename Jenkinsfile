@@ -85,12 +85,14 @@ pipeline {
             }
         }
 
+        
         stage('Build Docker Images') {
-            agent any  // <-- Important, il faut un agent ici
+            agent any
             steps {
-                sh "docker build -t my-backend ."
+                sh "docker build -t ${DOCKER_IMAGE} ."
             }
         }
+
 
         stage('Push to Docker Hub') {
             agent {
