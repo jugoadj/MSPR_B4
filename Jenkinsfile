@@ -96,11 +96,10 @@ pipeline {
             agent {
                 docker {
                     image 'docker:24.0-cli'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock -u root'
                     reuseNode true
                 }
             }
-           
             steps {
                 script {
                     docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker-hub-creds') {
