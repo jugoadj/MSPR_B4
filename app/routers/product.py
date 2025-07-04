@@ -1,32 +1,34 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session, joinedload
-from ..config.database import SessionLocal
+from typing import List
+from ..config.database import get_db
 from ..models.product import Product as ProductModel
 from ..models.price import Price as PriceModel
-from typing import List
-from ..config.schemas import ProductCreate, Product as ProductSchema, Price as PriceSchema, ProductUpdate
-
-from ..middelware.auth import verify_token  
+from ..schemas import ProductCreate, ProductResponse, PriceCreate, ProductUpdate
+from ..middleware.auth import verify_token
 
 router = APIRouter(
-    dependencies=[Depends(verify_token)]  
+    prefix="/api/products",
+    tags=["products"],
+    dependencies=[Depends(verify_token)]
 )
 
-router = APIRouter()
+NO_PRODUCT_FOUND = "Produit non trouvé"
 
-def get_db():
-    db = SessionLocal()
+@router.post(
+    "/",
+    response_model=ProductResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def create_product(
+    product_data: ProductCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Crée un nouveau produit avec ses prix associés
+    """
     try:
-        yield db
-    finally:
-        db.close()
-
-NO_PRODUCT_FOUND_MSG = "produit trouvé"
-
-
-@router.post("/products", response_model=ProductSchema)
-def create_product(product_data: ProductCreate = Body(...), db: Session = Depends(get_db)):
-    try:
+        # Création du produit
         db_product = ProductModel(
             name=product_data.name,
             description=product_data.description,
@@ -36,69 +38,104 @@ def create_product(product_data: ProductCreate = Body(...), db: Session = Depend
         db.commit()
         db.refresh(db_product)
 
-        # Ajouter les prix associés
-        for price_data in product_data.prices:
-            db_price = PriceModel(amount=price_data.amount, product_id=db_product.id)
+        # Ajout des prix
+        for price in product_data.prices:
+            db_price = PriceModel(
+                amount=price.amount,
+                product_id=db_product.id
+            )
             db.add(db_price)
-
+        
         db.commit()
         db.refresh(db_product)
         return db_product
+
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erreur lors de la création: {str(e)}"
+        )
 
-@router.get("/products/{product_id}", response_model=ProductSchema)
-def get_product(product_id: int, db: Session = Depends(get_db)):
-    try:
-        product = db.query(ProductModel).options(joinedload(ProductModel.prices)).filter(ProductModel.id == product_id).first()
-        if not product:
-            raise HTTPException(status_code=404, detail=NO_PRODUCT_FOUND_MSG)
-        return product
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/products", response_model=List[ProductSchema])
-def get_all_products(db: Session = Depends(get_db)):
-    try:
-        products = db.query(ProductModel).options(joinedload(ProductModel.prices)).all()
-        if not products:
-            raise HTTPException(status_code=404, detail="Aucun produit trouvé")
-        return products
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.put("/products/{product_id}", response_model=ProductSchema)
-def update_product(
+@router.get(
+    "/{product_id}",
+    response_model=ProductResponse
+)
+def get_product(
     product_id: int,
-    updated_product: ProductUpdate = Body(...),
     db: Session = Depends(get_db)
 ):
+    """
+    Récupère un produit spécifique par son ID
+    """
+    product = db.query(ProductModel)\
+        .options(joinedload(ProductModel.prices))\
+        .filter(ProductModel.id == product_id)\
+        .first()
+
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=NO_PRODUCT_FOUND
+        )
+    return product
+
+@router.get(
+    "/",
+    response_model=List[ProductResponse]
+)
+def get_all_products(db: Session = Depends(get_db)):
+    """
+    Récupère tous les produits avec leurs prix
+    """
+    products = db.query(ProductModel)\
+        .options(joinedload(ProductModel.prices))\
+        .all()
+    return products
+
+@router.put(
+    "/{product_id}",
+    response_model=ProductResponse
+)
+def update_product(
+    product_id: int,
+    product_data: ProductUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Met à jour un produit et ses prix
+    """
     try:
-        product = db.query(ProductModel).options(joinedload(ProductModel.prices)).filter(ProductModel.id == product_id).first()
+        product = db.query(ProductModel)\
+            .options(joinedload(ProductModel.prices))\
+            .filter(ProductModel.id == product_id)\
+            .first()
+
         if not product:
-            raise HTTPException(status_code=404, detail=NO_PRODUCT_FOUND_MSG)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=NO_PRODUCT_FOUND
+            )
 
-        # Mise à jour des champs simples
-        update_data = updated_product.dict(exclude_unset=True)
+        # Mise à jour des champs de base
+        update_data = product_data.dict(exclude_unset=True, exclude={"prices"})
+        for field, value in update_data.items():
+            setattr(product, field, value)
 
-        # Gérer les prix séparément
-        prices_data = update_data.pop("prices", None)
-
-        for key, value in update_data.items():
-            setattr(product, key, value)
-
-        # Si une nouvelle liste de prix est fournie, on remplace
-        if prices_data is not None:
-            # Supprimer les anciens prix
-            for old_price in product.prices:
-                db.delete(old_price)
-            db.commit()
-
-            # Ajouter les nouveaux prix
-            for price in prices_data:
-                new_price = PriceModel(amount=price["amount"], product_id=product.id)
-                db.add(new_price)
+        # Mise à jour des prix si fournis
+        if product_data.prices is not None:
+            # Suppression des anciens prix
+            db.query(PriceModel)\
+                .filter(PriceModel.product_id == product_id)\
+                .delete()
+            
+            # Ajout des nouveaux prix
+            for price in product_data.prices:
+                db_price = PriceModel(
+                    amount=price.amount,
+                    product_id=product.id
+                )
+                db.add(db_price)
 
         db.commit()
         db.refresh(product)
@@ -106,19 +143,38 @@ def update_product(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erreur lors de la mise à jour: {str(e)}"
+        )
 
-@router.delete("/products/{product_id}", response_model=dict)
-def delete_product(product_id: int, db: Session = Depends(get_db)):
+@router.delete(
+    "/{product_id}",
+    status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_product(
+    product_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Supprime un produit spécifique
+    """
+    product = db.query(ProductModel)\
+        .filter(ProductModel.id == product_id)\
+        .first()
+
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=NO_PRODUCT_FOUND
+        )
+
     try:
-        product = db.query(ProductModel).filter(ProductModel.id == product_id).first()
-        if not product:
-            raise HTTPException(status_code=404, detail=NO_PRODUCT_FOUND_MSG)
-
         db.delete(product)
         db.commit()
-        return {"detail": f"Produit avec l'id {product_id} supprimé avec succès."}
-
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erreur lors de la suppression: {str(e)}"
+        )
