@@ -17,7 +17,7 @@ pipeline {
         stage('Build & Test') {
             agent {
                 docker {
-                    image 'python:3.9-slim'
+                    image 'python:3.11-slim'
                     args '-u root'  // 👈 exécute en tant que root
                     reuseNode true
                 }
