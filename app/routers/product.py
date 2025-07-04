@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 
 router = APIRouter(
-    prefix="/api/products",
+    prefix="/products",
     tags=["products"],
     dependencies=[Depends(verify_token)],
     responses={
