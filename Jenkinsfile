@@ -4,7 +4,9 @@ pipeline {
     environment {
         DOCKER_IMAGE = "jugo835/produit-ms:${env.BUILD_NUMBER}"
         DOCKER_REGISTRY = "docker.io"
-        DATABASE_URL = "sqlite:///:memory:"
+        POSTGRES_USER = "testuser"
+        POSTGRES_PASSWORD = "testpassword"
+        POSTGRES_DB = "testdb"
     }
 
     stages {
@@ -19,6 +21,29 @@ pipeline {
             }
         }
 
+        stage('Start PostgreSQL') {
+            agent any
+            steps {
+                script {
+                    sh '''
+                        docker run -d \
+                          --name test-postgres \
+                          -e POSTGRES_USER=${POSTGRES_USER} \
+                          -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+                          -e POSTGRES_DB=${POSTGRES_DB} \
+                          -p 5432:5432 \
+                          postgres:15
+
+                        # Attendre que PostgreSQL soit prêt
+                        for i in {1..10}; do
+                          docker exec test-postgres pg_isready -U ${POSTGRES_USER} && break
+                          sleep 2
+                        done
+                    '''
+                }
+            }
+        }
+
         stage('Build & Test') {
             agent {
                 docker {
@@ -27,10 +52,13 @@ pipeline {
                     reuseNode true
                 }
             }
+            environment {
+                DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
+            }
             steps {
                 sh '''
                     pip install --no-cache-dir --upgrade pip
-                    pip install --no-cache-dir -r requirements.txt pytest pytest-cov
+                    pip install --no-cache-dir -r requirements.txt pytest pytest-cov psycopg2-binary
                     pytest --cov=app --junitxml=test-results.xml tests/
                 '''
             }
@@ -38,6 +66,16 @@ pipeline {
                 always {
                     junit 'test-results.xml'
                 }
+            }
+        }
+
+        stage('Stop PostgreSQL') {
+            agent any
+            steps {
+                sh '''
+                    docker stop test-postgres || true
+                    docker rm test-postgres || true
+                '''
             }
         }
 
@@ -69,7 +107,7 @@ pipeline {
             }
             steps {
                 script {
-                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker-hub-creds') {
+                    docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_HUB_CREDS) {
                         docker.image(DOCKER_IMAGE).push()
                         docker.image(DOCKER_IMAGE).push('latest')
                     }
@@ -81,48 +119,46 @@ pipeline {
             when {
                 branch 'main'
             }
-            agent {
-                any // Correction: déclaration correcte de l'agent
-            }
+            agent any
             environment {
+                DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
                 DOCKER_HOST = "unix:///var/run/docker.sock"
             }
             steps {
-                sh """
+                sh '''
                     docker stop produit-ms || true
                     docker rm produit-ms || true
-                    docker run -d \\
-                        --name produit-ms \\
-                        -p 8000:8000 \\
-                        -e DATABASE_URL=${DATABASE_URL} \\
+                    docker run -d \
+                        --name produit-ms \
+                        -p 8000:8000 \
+                        -e DATABASE_URL=${DATABASE_URL} \
                         ${DOCKER_IMAGE}
-                """
+                '''
             }
         }
     }
 
     post {
         always {
-            agent {
-                any // Correction: déclaration correcte de l'agent
-            }
+            agent any
             steps {
                 cleanWs()
                 script {
                     try {
                         sh "docker system prune -f"
-                    } catch(err) {
+                    } catch (err) {
                         echo "Cleanup error: ${err.message}"
                     }
                 }
             }
         }
+
         failure {
             emailext(
                 subject: "🚨 Échec du build #${env.BUILD_NUMBER}",
                 body: """
-                <p>Build ${env.JOB_NAME} #${env.BUILD_NUMBER} a échoué.</p>
-                <p>Consultez les logs: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                <p>Le build ${env.JOB_NAME} #${env.BUILD_NUMBER} a échoué.</p>
+                <p>Consultez les logs ici : <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
                 """,
                 to: 'adjoudjugo@gmail.com',
                 mimeType: 'text/html'
