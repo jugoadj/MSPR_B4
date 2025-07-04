@@ -7,6 +7,10 @@ pipeline {
         POSTGRES_USER = "testuser"
         POSTGRES_PASSWORD = "testpassword"
         POSTGRES_DB = "testdb"
+
+        // Ces deux variables doivent être définies via les Credentials Jenkins (type : "Secret Text")
+        DOCKER_HUB_USERNAME = credentials('docker-hub-username') // ID de la credential = docker-hub-username
+        DOCKER_HUB_PASSWORD = credentials('docker-hub-password') // ID de la credential = docker-hub-password
     }
 
     stages {
@@ -48,7 +52,6 @@ pipeline {
                     '''
                 }
             }
-
         }
 
         stage('Build & Test') {
@@ -79,36 +82,27 @@ pipeline {
         stage('Stop PostgreSQL') {
             agent any
             steps {
-                sh '''
-                    docker stop test-postgres || true
-                '''
+                sh 'docker stop test-postgres || true'
             }
         }
 
-        
-        stage('Build Docker Images') {
+        stage('Build Docker Image') {
             agent any
             steps {
                 sh "docker build -t ${DOCKER_IMAGE} ."
             }
         }
 
-
-        stage('Push to Docker Hub') {
-            agent {
-                docker {
-                    image 'docker:24.0-cli'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock -u root'
-                    reuseNode true
-                }
-            }
+        stage('Login & Push to Docker Hub') {
+            agent any
             steps {
-                script {
-                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker-hub-creds') {
-                        docker.image(DOCKER_IMAGE).push()
-                        docker.image(DOCKER_IMAGE).push('latest')
-                    }
-                }
+                sh """
+                    echo "${DOCKER_HUB_PASSWORD}" | docker login -u "${DOCKER_HUB_USERNAME}" --password-stdin
+                    docker tag ${DOCKER_IMAGE} jugo835/produit-ms:${BUILD_NUMBER}
+                    docker tag ${DOCKER_IMAGE} jugo835/produit-ms:latest
+                    docker push jugo835/produit-ms:${BUILD_NUMBER}
+                    docker push jugo835/produit-ms:latest
+                """
             }
         }
 
@@ -119,7 +113,6 @@ pipeline {
             agent any
             environment {
                 DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
-                DOCKER_HOST = "unix:///var/run/docker.sock"
             }
             steps {
                 sh '''
@@ -129,11 +122,9 @@ pipeline {
                         --name produit-ms \
                         -p 8000:8000 \
                         -e DATABASE_URL=${DATABASE_URL} \
-                        ${DOCKER_IMAGE}
+                        jugo835/produit-ms:${BUILD_NUMBER}
                 '''
             }
         }
     }
-
-    
 }
