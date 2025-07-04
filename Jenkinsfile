@@ -26,26 +26,29 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        docker run -d --rm \
-                          --name test-postgres \
-                          -e POSTGRES_USER=${POSTGRES_USER} \
-                          -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
-                          -e POSTGRES_DB=${POSTGRES_DB} \
-                          -p 5432:5432 \
-                          postgres:15
+                        docker stop test-postgres || true
+                        docker rm test-postgres || true
+
+                        docker run -d \
+                        --name test-postgres \
+                        -e POSTGRES_USER=${POSTGRES_USER} \
+                        -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+                        -e POSTGRES_DB=${POSTGRES_DB} \
+                        -p 5432:5432 \
+                        postgres:15
 
                         echo "Waiting for PostgreSQL to be ready..."
                         for i in {1..15}; do
-                          docker exec test-postgres pg_isready -U ${POSTGRES_USER} && break
-                          echo "PostgreSQL is not ready yet, sleeping..."
-                          sleep 2
+                        docker exec test-postgres pg_isready -U ${POSTGRES_USER} && break
+                        echo "PostgreSQL is not ready yet, sleeping..."
+                        sleep 2
                         done
 
-                        # Vérifier si prêt, sinon erreur
                         docker exec test-postgres pg_isready -U ${POSTGRES_USER} || (echo "PostgreSQL did not start properly." && exit 1)
                     '''
                 }
             }
+
         }
 
         stage('Build & Test') {
