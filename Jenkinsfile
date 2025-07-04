@@ -108,7 +108,7 @@ pipeline {
                 cleanWs()
                 script {
                     try {
-                        sh "docker system prune -f"  # Nettoyage plus complet
+                        sh "docker system prune -f"  // Nettoyage plus complet
                     } catch(err) {
                         echo "Cleanup error: ${err.message}"
                     }
