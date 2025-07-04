@@ -196,8 +196,10 @@ pipeline {
     }
 
     post {
+        agent any
         always {
-            node {
+            script {
+                // Nettoyage final
                 sh '''
                     docker stop produit-ms || true
                     docker rm produit-ms || true
@@ -209,11 +211,12 @@ pipeline {
             }
         }
         success {
+            // Notification de succès (à configurer)
             echo "Build ${env.BUILD_NUMBER} succeeded!"
         }
         failure {
+            // Notification d'échec (à configurer)
             echo "Build ${env.BUILD_NUMBER} failed!"
         }
     }
-
 }
