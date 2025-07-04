@@ -7,6 +7,10 @@ pipeline {
         POSTGRES_USER = "testuser"
         POSTGRES_PASSWORD = "testpassword"
         POSTGRES_DB = "testdb"
+
+        DOCKER_USERNAME = credentials('docker-hub-creds-username')
+        DOCKER_PASSWORD = credentials('docker-hub-creds-password')
+
     }
 
     stages {
@@ -94,40 +98,38 @@ pipeline {
         }
 
 
-        stage('Push to Docker Hub') {
-            agent {
-                docker {
-                    image 'docker:24.0-cli'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock -u root'
-                    reuseNode true
-                }
+    stage('Push to Docker Hub') {
+        agent {
+            docker {
+                image 'docker:24.0-cli'
+                args '-v /var/run/docker.sock:/var/run/docker.sock -u root'
+                reuseNode true
             }
-            steps {
-                script {
-                    // Re-tagger l'image avec le nom attendu par Docker Hub
+        }
+        steps {
+            script {
+                // 1. First ensure the repository exists on Docker Hub
+                // 2. Login to Docker Hub (fallback if credentials binding fails)
+                sh '''
+                    docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+                '''
+                
+                // Tag images
+                sh """
+                    docker tag ${DOCKER_IMAGE} ${DOCKER_REGISTRY}/jugo835/produit-ms:${env.BUILD_NUMBER}
+                    docker tag ${DOCKER_IMAGE} ${DOCKER_REGISTRY}/jugo835/produit-ms:latest
+                """
+                
+                // Push with retries
+                retry(3) {
                     sh """
-                        docker tag ${DOCKER_IMAGE} jugo835/produit-ms:${BUILD_NUMBER}
-                        docker tag ${DOCKER_IMAGE} jugo835/produit-ms:latest
+                        docker push ${DOCKER_REGISTRY}/jugo835/produit-ms:${env.BUILD_NUMBER}
+                        docker push ${DOCKER_REGISTRY}/jugo835/produit-ms:latest
                     """
-
-                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker-hub-creds') {
-                        docker.image("jugo835/produit-ms:${BUILD_NUMBER}").push()
-                        docker.image("jugo835/produit-ms:latest").push()
-                    }
-                    sh "docker tag ${DOCKER_IMAGE} jugo835/produit-ms:${BUILD_NUMBER}"
-                    sh "docker tag ${DOCKER_IMAGE} jugo835/produit-ms:latest"
-
-                    withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh '''
-                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                            docker push jugo835/produit-ms:${BUILD_NUMBER}
-                            docker push jugo835/produit-ms:latest
-                        '''
-                    }
-
                 }
             }
         }
+    }
 
 
         stage('Deploy to Dev') {
