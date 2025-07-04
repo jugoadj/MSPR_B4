@@ -85,19 +85,10 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
-            agent {
-                docker {
-                    image 'docker:24.0-cli'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock --network=host'
-                    reuseNode true
-                }
-            }
-            steps {
-                script {
-                    docker.build(DOCKER_IMAGE)
-                }
-            }
+        stage('Build Docker Images') {
+        steps {
+            sh "docker build -t my-backend."
+        }
         }
 
         stage('Push to Docker Hub') {
