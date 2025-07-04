@@ -114,6 +114,17 @@ pipeline {
                         docker.image("jugo835/produit-ms:${BUILD_NUMBER}").push()
                         docker.image("jugo835/produit-ms:latest").push()
                     }
+                    sh "docker tag ${DOCKER_IMAGE} jugo835/produit-ms:${BUILD_NUMBER}"
+                    sh "docker tag ${DOCKER_IMAGE} jugo835/produit-ms:latest"
+
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh '''
+                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                            docker push jugo835/produit-ms:${BUILD_NUMBER}
+                            docker push jugo835/produit-ms:latest
+                        '''
+                    }
+
                 }
             }
         }
