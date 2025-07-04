@@ -100,12 +100,9 @@ pipeline {
                     reuseNode true
                 }
             }
-            environment {
-                DOCKER_HUB_CREDS = credentials('docker-hub-creds')
-            }
             steps {
                 script {
-                    docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_HUB_CREDS) {
+                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker-hub-creds') {
                         docker.image(DOCKER_IMAGE).push()
                         docker.image(DOCKER_IMAGE).push('latest')
                     }
