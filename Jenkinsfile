@@ -197,24 +197,48 @@ pipeline {
 
     post {
         always {
-            node {
-                // Nettoyage final
-                sh '''
-                    docker stop produit-ms || true
-                    docker rm produit-ms || true
-                    docker stop prod-postgres || true
-                    docker rm prod-postgres || true
-                    docker network rm produit-network || true
-                    docker logout || true
-                '''
+            // Utilisation d'un agent pour les opérations de nettoyage
+            agent any
+            steps {
+                script {
+                    try {
+                        sh '''
+                            echo "Nettoyage des ressources Docker..."
+                            docker stop produit-ms || echo "Le container produit-ms n'existe pas ou est déjà arrêté"
+                            docker rm produit-ms || echo "Le container produit-ms n'existe pas"
+                            docker stop prod-postgres || echo "Le container prod-postgres n'existe pas ou est déjà arrêté"
+                            docker rm prod-postgres || echo "Le container prod-postgres n'existe pas"
+                            docker network rm produit-network || echo "Le réseau produit-network n'existe pas"
+                            docker logout || echo "Logout Docker non nécessaire"
+                            echo "Nettoyage terminé avec succès"
+                        '''
+                    } catch (Exception e) {
+                        echo "Erreur lors du nettoyage: ${e.message}"
+                    }
+                }
             }
         }
         success {
-            echo "Build ${env.BUILD_NUMBER} succeeded!"
+            script {
+                echo "Build ${env.BUILD_NUMBER} réussi!"
+                // Ajouter ici des notifications supplémentaires (Slack, email, etc.)
+                // slackSend(color: 'good', message: "Build ${env.BUILD_NUMBER} réussi!")
+            }
         }
         failure {
-            echo "Build ${env.BUILD_NUMBER} failed!"
+            script {
+                echo "Build ${env.BUILD_NUMBER} échoué!"
+                // Ajouter ici des notifications d'échec
+                // slackSend(color: 'danger', message: "Build ${env.BUILD_NUMBER} échoué!")
+            }
+        }
+        unstable {
+            echo "Build ${env.BUILD_NUMBER} instable!"
+        }
+        changed {
+            echo "Le statut du build a changé par rapport au précédent!"
         }
     }
+
 
 }
