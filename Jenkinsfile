@@ -26,7 +26,7 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        docker run -d \
+                        docker run -d --rm \
                           --name test-postgres \
                           -e POSTGRES_USER=${POSTGRES_USER} \
                           -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
@@ -34,11 +34,15 @@ pipeline {
                           -p 5432:5432 \
                           postgres:15
 
-                        # Attendre que PostgreSQL soit prêt
-                        for i in {1..10}; do
+                        echo "Waiting for PostgreSQL to be ready..."
+                        for i in {1..15}; do
                           docker exec test-postgres pg_isready -U ${POSTGRES_USER} && break
+                          echo "PostgreSQL is not ready yet, sleeping..."
                           sleep 2
                         done
+
+                        # Vérifier si prêt, sinon erreur
+                        docker exec test-postgres pg_isready -U ${POSTGRES_USER} || (echo "PostgreSQL did not start properly." && exit 1)
                     '''
                 }
             }
@@ -59,7 +63,7 @@ pipeline {
                 sh '''
                     pip install --no-cache-dir --upgrade pip
                     pip install --no-cache-dir -r requirements.txt pytest pytest-cov psycopg2-binary
-                    pytest --cov=app --junitxml=test-results.xml tests/
+                    pytest --cov=app --junitxml=test-results.xml -v tests/
                 '''
             }
             post {
@@ -74,7 +78,6 @@ pipeline {
             steps {
                 sh '''
                     docker stop test-postgres || true
-                    docker rm test-postgres || true
                 '''
             }
         }
@@ -140,30 +143,25 @@ pipeline {
 
     post {
         always {
-            steps {
-                cleanWs()
-                script {
-                    try {
-                        sh "docker system prune -f"
-                    } catch (err) {
-                        echo "Cleanup error: ${err.message}"
-                    }
+            cleanWs()
+            script {
+                try {
+                    sh "docker system prune -f"
+                } catch (err) {
+                    echo "Cleanup error: ${err.message}"
                 }
             }
         }
         failure {
-            steps {
-                emailext(
-                    subject: "🚨 Échec du build #${env.BUILD_NUMBER}",
-                    body: """
+            emailext(
+                subject: "🚨 Échec du build #${env.BUILD_NUMBER}",
+                body: """
                     <p>Le build ${env.JOB_NAME} #${env.BUILD_NUMBER} a échoué.</p>
                     <p>Consultez les logs ici : <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                    """,
-                    to: 'adjoudjugo@gmail.com',
-                    mimeType: 'text/html'
-                )
-            }
+                """,
+                to: 'adjoudjugo@gmail.com',
+                mimeType: 'text/html'
+            )
         }
     }
-
 }

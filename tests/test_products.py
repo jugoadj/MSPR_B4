@@ -1,21 +1,20 @@
-
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from app.main import app
-from app.config.database import get_db
-from .conftest import TestingSessionLocal  # Import partagé
+from app.config.database import Base, get_db
 
-# Supprimez la configuration redondante de la DB
-# Utilisez directement les fixtures de conftest.py
+# Configuration de la base de données de test
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
-@pytest.fixture
-def client(db_session):
-    def override_get_db():
-        yield db_session
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
-    app.dependency_overrides.clear()
+# Créer les tables
+Base.metadata.create_all(bind=engine)
 
 # Fixture pour la session DB
 @pytest.fixture
