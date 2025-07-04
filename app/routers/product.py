@@ -13,7 +13,6 @@ from datetime import datetime
 router = APIRouter(
     prefix="/products",
     tags=["products"],
-    dependencies=[Depends(verify_token)],
     responses={
         404: {"description": "Produit non trouvé"},
         401: {"description": "Non autorisé"},
