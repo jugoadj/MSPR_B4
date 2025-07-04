@@ -51,7 +51,7 @@ SAMPLE_PRODUCT = {
 # Tests principaux
 def test_create_product(client):
     response = client.post("/api/products", json=SAMPLE_PRODUCT)
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
     assert data["name"] == SAMPLE_PRODUCT["name"]
     assert data["stock"] == SAMPLE_PRODUCT["stock"]
@@ -63,7 +63,7 @@ def test_get_product(client):
 
     # Puis le récupérer
     response = client.get(f"/api/products/{product_id}")
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.json()["id"] == product_id
 
 def test_get_all_products(client):
@@ -72,7 +72,7 @@ def test_get_all_products(client):
 
     # Récupérer tous les produits
     response = client.get("/api/products")
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert len(response.json()) > 0
 
 def test_update_product(client):
@@ -83,7 +83,7 @@ def test_update_product(client):
     # Mettre à jour
     update_data = {"name": "Updated Product"}
     response = client.put(f"/api/products/{product_id}", json=update_data)
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.json()["name"] == "Updated Product"
 
 def test_delete_product(client):
@@ -93,7 +93,7 @@ def test_delete_product(client):
 
     # Supprimer
     delete_response = client.delete(f"/api/products/{product_id}")
-    assert delete_response.status_code == 200
+    assert delete_response.status_code == 201
 
     # Vérifier qu'il n'existe plus
     get_response = client.get(f"/api/products/{product_id}")
