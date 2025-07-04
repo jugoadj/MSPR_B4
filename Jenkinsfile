@@ -16,7 +16,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: 'main', 
-                url: 'https://github.com/votre-repo/produit-ms.git'
+                url: 'https://github.com/jugoadj/MSPR_B4.git'
             }
         }
 
