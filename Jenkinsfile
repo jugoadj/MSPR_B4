@@ -79,26 +79,26 @@ pipeline {
             }
         }
 
-        stage('Deploy to Dev') {
-            when {
-                branch 'main'
-            }
-            agent any  // Modification: plus flexible que 'docker'
-            environment {
-                DOCKER_HOST = "unix:///var/run/docker.sock"  // Configuration Docker
-            }
-            steps {
-                sh '''
-                    docker stop produit-ms || true
-                    docker rm produit-ms || true
-                    docker run -d \
-                        --name produit-ms \
-                        -p 8000:8000 \
-                        -e DATABASE_URL=${DATABASE_URL} \  // Injection variable d'environnement
-                        ${DOCKER_IMAGE}
-                '''
-            }
-        }
+        sstage('Deploy to Dev') {
+    when {
+        branch 'main'
+    }
+    agent any
+    environment {
+        DOCKER_HOST = "unix:///var/run/docker.sock"
+    }
+    steps {
+        sh """
+            docker stop produit-ms || true
+            docker rm produit-ms || true
+            docker run -d \
+                --name produit-ms \
+                -p 8000:8000 \
+                -e DATABASE_URL=${DATABASE_URL} \
+                ${DOCKER_IMAGE}
+        """
+    }
+}
     }
 
     post {
