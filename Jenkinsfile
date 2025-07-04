@@ -136,27 +136,5 @@ pipeline {
         }
     }
 
-    post {
-        always {
-            cleanWs()
-            script {
-                try {
-                    sh "docker system prune -f"
-                } catch (err) {
-                    echo "Cleanup error: ${err.message}"
-                }
-            }
-        }
-        failure {
-            emailext(
-                subject: "🚨 Échec du build #${env.BUILD_NUMBER}",
-                body: """
-                    <p>Le build ${env.JOB_NAME} #${env.BUILD_NUMBER} a échoué.</p>
-                    <p>Consultez les logs ici : <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                """,
-                to: 'adjoudjugo@gmail.com',
-                mimeType: 'text/html'
-            )
-        }
-    }
+    
 }
