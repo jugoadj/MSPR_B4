@@ -5,7 +5,7 @@ from ..config.database import get_db
 from ..models.product import Product as ProductModel
 from ..models.price import Price as PriceModel
 from ..config.schemas import ProductCreate, ProductResponse, PriceCreate, ProductUpdate
-from ..middleware.auth import verify_token
+from ..middelware.auth import verify_token
 from pydantic import Field
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
