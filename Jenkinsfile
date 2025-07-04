@@ -2,17 +2,13 @@ pipeline {
     agent any
 
     environment {
-        // Configuration Docker Hub
         DOCKER_HUB_CREDENTIALS = credentials('docker-hub-creds')
         DOCKER_IMAGE = "jugo835/produit-ms:${env.BUILD_NUMBER}"
-        
-        // Configuration SonarQube
         SONAR_SCANNER_HOME = tool 'sonar-scanner'
         SONAR_PROJECT_KEY = "produit-ms"
-    }  
+    }
 
     stages {
-        // Étape 1 : Récupération du code
         stage('Checkout') {
             steps {
                 git branch: 'main', 
@@ -20,7 +16,6 @@ pipeline {
             }
         }
 
-        // Étape 2 : Installation des dépendances
         stage('Install dependencies') {
             steps {
                 sh 'pip install -r requirements.txt'
@@ -28,19 +23,17 @@ pipeline {
             }
         }
 
-        // Étape 3 : Exécution des tests
         stage('Run Tests') {
             steps {
                 sh 'pytest --cov=app --cov-report=xml:coverage.xml tests/'
             }
             post {
                 always {
-                    junit 'test-reports/*.xml'  // Archive les résultats des tests
+                    junit 'test-reports/*.xml'
                 }
             }
         }
 
-        // Étape 4 : Analyse SonarQube
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube-Server') {
@@ -55,8 +48,14 @@ pipeline {
             }
         }
 
-        // Étape 5 : Build Docker
+        // MODIFICATION CLAÉ : Utilisation d'un agent Docker pour les étapes Docker
         stage('Build Docker Image') {
+            agent {
+                docker {
+                    image 'docker:latest'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
             steps {
                 script {
                     docker.build(DOCKER_IMAGE)
@@ -64,52 +63,58 @@ pipeline {
             }
         }
 
-        // Étape 6 : Push vers Docker Hub
         stage('Push to Docker Hub') {
+            agent {
+                docker {
+                    image 'docker:latest'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
             steps {
                 script {
                     docker.withRegistry('https://registry.hub.docker.com', 'docker-hub-creds') {
                         docker.image(DOCKER_IMAGE).push()
-                        // Taggage supplémentaire pour 'latest' (optionnel)
                         docker.image(DOCKER_IMAGE).push('latest')
                     }
                 }
             }
         }
 
-        // Étape 7 : Déploiement (optionnel)
         stage('Deploy to Dev') {
             when {
                 branch 'main'
             }
             steps {
-                sh """
-                docker stop produit-ms || true
-                docker rm produit-ms || true
-                docker run -d \\
-                    --name produit-ms \\
-                    -p 8000:8000 \\
-                    ${DOCKER_IMAGE}
-                """
+                script {
+                    sh """
+                    docker stop produit-ms || true
+                    docker rm produit-ms || true
+                    docker run -d \\
+                        --name produit-ms \\
+                        -p 8000:8000 \\
+                        ${DOCKER_IMAGE}
+                    """
+                }
             }
         }
     }
 
     post {
-        // Nettoyage après build
         always {
             cleanWs()
             script {
-                // Suppression des images locales pour économiser de l'espace
-                docker.image(DOCKER_IMAGE).remove()
+                // MODIFICATION : Suppression conditionnelle
+                try {
+                    docker.image(DOCKER_IMAGE).remove()
+                } catch(e) {
+                    echo "Erreur lors du nettoyage : ${e.message}"
+                }
             }
         }
-        
-        // Notification en cas d'échec
         failure {
             emailext (
                 subject: "🚨 Échec du build #${BUILD_NUMBER}",
-                body: "Le build ${BUILD_URL} a échoué",
+                body: "Consultez les détails : ${env.BUILD_URL}",
                 to: "team@example.com"
             )
         }
