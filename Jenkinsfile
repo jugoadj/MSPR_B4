@@ -18,17 +18,19 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.9-slim'
+                    args '-u root'  // 👈 exécute en tant que root
                     reuseNode true
                 }
             }
             steps {
                 sh '''
-                    python -m pip install --no-cache-dir --upgrade pip
+                    pip install --no-cache-dir --upgrade pip
                     pip install --no-cache-dir -r requirements.txt pytest pytest-cov
                     pytest --cov=app tests/
                 '''
             }
         }
+
         stage('Build Docker Image') {
             agent {
                 docker {
