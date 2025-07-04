@@ -1,22 +1,17 @@
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from app.config.database import Base
+from fastapi.testclient import TestClient
+from app.main import app  # Remplace par ton app FastAPI
+from app.config.database import Base, get_db  # get_db vient de database.py
 
-# Base SQLite en mémoire (ultra rapide, disparaît après la fin du test)
-DATABASE_URL = "sqlite:///:memory:"
-
-# Création de l'engine
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-
-# Session liée à l'engine
+# (déjà défini)
+DATABASE_URL_test = "sqlite:///:memory:"
+engine = create_engine(DATABASE_URL_test, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Fixture session de test
 @pytest.fixture(scope="function")
 def db_session():
-    # Avant chaque test, créer les tables
     Base.metadata.create_all(bind=engine)
-
     db = TestingSessionLocal()
     try:
         yield db
@@ -26,6 +21,14 @@ def db_session():
         raise
     finally:
         db.close()
-
-    # Après chaque test, drop des tables pour nettoyer la base
     Base.metadata.drop_all(bind=engine)
+
+# Surcharge de la dépendance get_db de database.py
+@pytest.fixture(scope="function")
+def client(db_session):
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as c:
+        yield c
