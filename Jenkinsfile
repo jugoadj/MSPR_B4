@@ -90,7 +90,6 @@ pipeline {
                     pytest --cov=app --junitxml=test-results.xml -v tests/
                 '''
             }
-            }
 
             post {
                 always {
