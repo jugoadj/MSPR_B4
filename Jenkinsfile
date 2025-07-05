@@ -194,65 +194,36 @@ pipeline {
                 }
             }
         }
-
-        // Étape 8: Déploiement sur Docker Desktop
-        stage('Deploy to Docker Desktop') {
-            agent any
-            environment {
-                DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@prod-postgres:5432/${POSTGRES_DB}"
+                // Étape 6.5: Pull de l'image sur Docker Desktop
+        stage('Pull on Docker Desktop') {
+            when {
+                branch 'main'
             }
+            agent any
             steps {
                 script {
-                    sshagent(['your-ssh-credentials']) {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-hub-creds',
+                        passwordVariable: 'DOCKER_PASSWORD',
+                        usernameVariable: 'DOCKER_USERNAME'
+                    )]) {
                         sh """
-                            ssh -o StrictHostKeyChecking=no user@your-local-ip << 'ENDSSH'
-                            # Arrêt des containers existants
-                            docker stop produit-ms || true
-                            docker rm produit-ms || true
-                            docker stop prod-postgres || true
-                            docker rm prod-postgres || true
-                            
-                            # Création du réseau
-                            docker network create produit-network || true
-                            
-                            # Lancement de PostgreSQL
-                            docker run -d \\
-                                --name prod-postgres \\
-                                --network produit-network \\
-                                -e POSTGRES_USER=${POSTGRES_USER} \\
-                                -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \\
-                                -e POSTGRES_DB=${POSTGRES_DB} \\
-                                -p 5433:5432 \\
-                                postgres:15
-                            
-                            # Attente que PostgreSQL soit prêt
-                            sleep 10
-                            
-                            # Téléchargement de la dernière image
+                            echo "Connexion à Docker Hub..."
                             docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD} ${DOCKER_REGISTRY}
-                            docker pull ${DOCKER_REGISTRY}/jugo835/produit-ms:latest
+                            
+                            echo "Pull de l'image ${DOCKER_REGISTRY}/${DOCKER_IMAGE} sur Docker Desktop..."
+                            docker pull ${DOCKER_REGISTRY}/${DOCKER_IMAGE}
+                            
+                            echo "Déconnexion de Docker Hub..."
                             docker logout
-                            
-                            # Lancement de l'application
-                            docker run -d \\
-                                --name produit-ms \\
-                                --network produit-network \\
-                                -p 8000:8000 \\
-                                -e DATABASE_URL=${DATABASE_URL} \\
-                                ${DOCKER_REGISTRY}/jugo835/produit-ms:latest
-                            
-                            # Vérification
-                            sleep 5
-                            curl -f http://localhost:8000/health || \\
-                                (echo "Application health check failed" && exit 1)
-                            echo "Application deployed successfully to Docker Desktop!"
-                            ENDSSH
                         """
                     }
                 }
             }
         }
     }
+
+        
 
     post {
         always {
