@@ -79,14 +79,19 @@ pipeline {
             }
             steps {
                 sh '''
-                    # Installation des dépendances
                     pip install --no-cache-dir --upgrade pip
+                    
+                    # Forcer la désinstallation de la lib au cas où une ancienne version serait préinstallée
+                    pip uninstall -y prometheus-fastapi-instrumentator || true
+                    
+                    # Installer toutes les dépendances avec la bonne version
                     pip install --no-cache-dir -r requirements.txt pytest pytest-cov psycopg2-binary
                     
-                    # Exécution des tests
                     pytest --cov=app --junitxml=test-results.xml -v tests/
                 '''
             }
+            }
+
             post {
                 always {
                     junit 'test-results.xml'
