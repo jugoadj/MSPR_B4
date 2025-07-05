@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from .routers import product
 from .config.database import Base, engine
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_fastapi_instrumentator.metrics import http_exceptions_total
+
+
 
 
 app = FastAPI()
@@ -11,7 +14,12 @@ app = FastAPI()
 
 app.include_router(product.router, prefix="/api")
 
-Instrumentator().instrument(app).expose(app)
+instrumentator = Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    should_group_untemplated=True,
+)
+instrumentator.add(http_exceptions_total()).instrument(app).expose(app)
 
 
 def init_db():

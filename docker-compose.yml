@@ -6,6 +6,8 @@ services:
       - "8000:8000"
     environment:
       - ENV=dev
+    networks:
+      - monitoring-net
 
   prometheus:
     image: prom/prometheus:latest
@@ -15,12 +17,19 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
+    networks:
+      - monitoring-net
 
   grafana:
     image: grafana/grafana:latest
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin  # changer ce mot de passe pour la prod
+      - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
       - prometheus
+    networks:
+      - monitoring-net
+
+networks:
+  monitoring-net:
