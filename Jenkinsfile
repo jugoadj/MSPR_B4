@@ -254,20 +254,25 @@ pipeline {
         }
     }
 
-    post {
+    ppost {
         always {
             script {
-                echo "Nettoyage des ressources locales..."
-                sh '''
-                    docker stop test-postgres || true
-                    docker rm test-postgres || true
-                    docker stop produit-ms || true
-                    docker rm produit-ms || true
-                    docker stop prod-postgres || true
-                    docker rm prod-postgres || true
-                    docker network rm produit-network || true
-                '''
-                echo "Nettoyage terminé"
+                node {
+                    try {
+                        sh '''
+                        echo "Nettoyage des ressources Docker..."
+                        docker stop produit-ms || echo "Le container produit-ms n'existe pas ou est déjà arrêté"
+                        docker rm produit-ms || echo "Le container produit-ms n'existe pas"
+                        docker stop prod-postgres || echo "Le container prod-postgres n'existe pas ou est déjà arrêté"
+                        docker rm prod-postgres || echo "Le container prod-postgres n'existe pas"
+                        docker network rm produit-network || echo "Le réseau produit-network n'existe pas"
+                        docker logout || echo "Logout Docker non nécessaire"
+                        echo "Nettoyage terminé avec succès"
+                        '''
+                    } catch (Exception e) {
+                        echo "Erreur lors du nettoyage: ${e.message}"
+                    }
+                }
             }
         }
     }
