@@ -254,7 +254,7 @@ pipeline {
         }
     }
 
-    ppost {
+    post {
         always {
             script {
                 node {
