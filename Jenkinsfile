@@ -248,12 +248,11 @@ pipeline {
                             echo "Application deployed successfully to Docker Desktop!"
                             ENDSSH
                         """
-
                     }
                 }
             }
+        }
     }
-    
 
     post {
         always {
