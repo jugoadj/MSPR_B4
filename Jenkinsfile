@@ -194,6 +194,66 @@ pipeline {
             }
         }
     }
+    stage('Deploy to Docker Desktop') {
+            agent any
+            environment {
+                DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@prod-postgres:5432/${POSTGRES_DB}"
+            }
+            steps {
+                script {
+                    // Cette commande SSH serait exécutée sur votre machine locale
+                    // Vous devez configurer l'accès SSH entre Jenkins et votre machine
+                    sshagent(['your-ssh-credentials']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no user@your-local-ip << 'ENDSSH'
+                            # Arrêt des containers existants
+                            docker stop produit-ms || true
+                            docker rm produit-ms || true
+                            docker stop prod-postgres || true
+                            docker rm prod-postgres || true
+                            
+                            # Création du réseau
+                            docker network create produit-network || true
+                            
+                            # Lancement de PostgreSQL
+                            docker run -d \\
+                                --name prod-postgres \\
+                                --network produit-network \\
+                                -e POSTGRES_USER=${POSTGRES_USER} \\
+                                -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \\
+                                -e POSTGRES_DB=${POSTGRES_DB} \\
+                                -p 5433:5432 \\
+                                postgres:15
+                            
+                            # Attente que PostgreSQL soit prêt
+                            sleep 10
+                            
+                            # Téléchargement de la dernière image
+                            docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD} ${DOCKER_REGISTRY}
+                            docker pull ${DOCKER_REGISTRY}/${DOCKER_IMAGE}
+                            docker logout
+                            
+                            # Lancement de l'application
+                            docker run -d \\
+                                --name produit-ms \\
+                                --network produit-network \\
+                                -p 8000:8000 \\
+                                -e DATABASE_URL=${DATABASE_URL} \\
+                                ${DOCKER_REGISTRY}/${DOCKER_IMAGE}
+                            
+                            # Vérification
+                            sleep 5
+                            curl -f http://localhost:8000/health || \\
+                                (echo "Application health check failed" && exit 1)
+                            echo "Application deployed successfully to Docker Desktop!"
+                            ENDSSH
+                        """
+
+                    }
+                }
+            }
+    }
+    
 
     post {
         always {

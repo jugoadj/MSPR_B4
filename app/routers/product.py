@@ -5,9 +5,7 @@ from ..config.database import get_db
 from ..models.product import Product as ProductModel
 from ..models.price import Price as PriceModel
 from ..config.schemas import ProductCreate, ProductResponse, PriceCreate, ProductUpdate
-from pydantic import Field
 from sqlalchemy.exc import SQLAlchemyError
-from datetime import datetime
 
 router = APIRouter(
     prefix="/products",
@@ -30,34 +28,25 @@ router = APIRouter(
     }
 )
 def create_product(
-    product_data: ProductCreate = Body(
-        ...,
-        example={
-            "name": "Nouveau produit",
-            "description": "Description du produit",
-            "stock": 100,
-            "prices": [{"amount": 19.99}]
-        }
-    ),
+    product_data: ProductCreate = Body(...),
     db: Session = Depends(get_db)
 ):
     """
-    Crée un nouveau produit avec ses prix associés
-    
-    - **name**: Nom du produit (requis)
-    - **description**: Description du produit
-    - **stock**: Quantité en stock (doit être ≥ 0)
-    - **prices**: Liste des prix associés (au moins un prix requis)
+    Crée un nouveau produit avec ses prix associés.
     """
     try:
-        # Validation supplémentaire
         if not product_data.prices:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Au moins un prix doit être fourni"
             )
 
-        # Création du produit
+        if any(price.amount <= 0 for price in product_data.prices):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tous les prix doivent être supérieurs à 0"
+            )
+
         db_product = ProductModel(
             name=product_data.name,
             description=product_data.description,
@@ -67,19 +56,13 @@ def create_product(
         db.commit()
         db.refresh(db_product)
 
-        # Ajout des prix
         for price in product_data.prices:
-            if price.amount <= 0:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Le prix doit être supérieur à 0"
-                )
             db_price = PriceModel(
                 amount=price.amount,
                 product_id=db_product.id
             )
             db.add(db_price)
-        
+
         db.commit()
         db.refresh(db_product)
         return ProductResponse.model_validate(db_product)
@@ -88,7 +71,7 @@ def create_product(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Erreur de base de données: {str(e)}"
+            detail=f"Erreur de base de données : {str(e)}"
         )
     except HTTPException:
         raise
@@ -96,7 +79,7 @@ def create_product(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur inattendue: {str(e)}"
+            detail=f"Erreur inattendue : {str(e)}"
         )
 
 @router.get(
@@ -112,7 +95,7 @@ def get_product(
     db: Session = Depends(get_db)
 ):
     """
-    Récupère un produit spécifique par son ID avec tous ses prix
+    Récupère un produit spécifique par son ID avec tous ses prix.
     """
     product = db.query(ProductModel)\
         .options(joinedload(ProductModel.prices))\
@@ -124,7 +107,7 @@ def get_product(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Produit non trouvé"
         )
-    
+
     return ProductResponse.model_validate(product)
 
 @router.get(
@@ -138,14 +121,14 @@ def get_all_products(
     db: Session = Depends(get_db)
 ):
     """
-    Récupère tous les produits avec leurs prix (pagination disponible)
+    Récupère tous les produits avec leurs prix (pagination disponible).
     """
     products = db.query(ProductModel)\
         .options(joinedload(ProductModel.prices))\
         .offset(skip)\
         .limit(limit)\
         .all()
-    
+
     return [ProductResponse.model_validate(p) for p in products]
 
 @router.put(
@@ -159,14 +142,11 @@ def get_all_products(
 )
 def update_product(
     product_id: int = Path(..., description="ID du produit à mettre à jour"),
-    product_data: ProductUpdate = Body(..., description="Nouvelles données du produit"),
+    product_data: ProductUpdate = Body(...),
     db: Session = Depends(get_db)
 ):
     """
-    Met à jour un produit et/ou ses prix
-    
-    - Seuls les champs fournis seront mis à jour
-    - Pour les prix, toute la liste doit être fournie (remplacement complet)
+    Met à jour un produit et/ou ses prix. Tous les anciens prix sont remplacés.
     """
     try:
         product = db.query(ProductModel)\
@@ -180,26 +160,19 @@ def update_product(
                 detail="Produit non trouvé"
             )
 
-        # Mise à jour des champs de base (uniquement ceux fournis)
         update_data = product_data.dict(exclude_unset=True, exclude={"prices"})
         for field, value in update_data.items():
             setattr(product, field, value)
 
-        # Mise à jour des prix si fournis
         if product_data.prices is not None:
-            # Validation des prix
             if any(price.amount <= 0 for price in product_data.prices):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Tous les prix doivent être supérieurs à 0"
                 )
-            
-            # Suppression des anciens prix
-            db.query(PriceModel)\
-                .filter(PriceModel.product_id == product_id)\
-                .delete()
-            
-            # Ajout des nouveaux prix
+
+            db.query(PriceModel).filter(PriceModel.product_id == product_id).delete()
+
             for price in product_data.prices:
                 db_price = PriceModel(
                     amount=price.amount,
@@ -215,7 +188,7 @@ def update_product(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Erreur de base de données: {str(e)}"
+            detail=f"Erreur de base de données : {str(e)}"
         )
     except HTTPException:
         raise
@@ -223,7 +196,7 @@ def update_product(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur inattendue: {str(e)}"
+            detail=f"Erreur inattendue : {str(e)}"
         )
 
 @router.delete(
@@ -240,14 +213,9 @@ def delete_product(
     db: Session = Depends(get_db)
 ):
     """
-    Supprime un produit spécifique et tous ses prix associés
-    
-    - Suppression permanente
-    - Retourne un code 204 sans contenu si réussi
+    Supprime un produit spécifique et tous ses prix associés.
     """
-    product = db.query(ProductModel)\
-        .filter(ProductModel.id == product_id)\
-        .first()
+    product = db.query(ProductModel).filter(ProductModel.id == product_id).first()
 
     if not product:
         raise HTTPException(
@@ -256,17 +224,12 @@ def delete_product(
         )
 
     try:
-        # Suppression en cascade des prix
-        db.query(PriceModel)\
-            .filter(PriceModel.product_id == product_id)\
-            .delete()
-        
-        # Suppression du produit
+        db.query(PriceModel).filter(PriceModel.product_id == product_id).delete()
         db.delete(product)
         db.commit()
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la suppression: {str(e)}"
+            detail=f"Erreur lors de la suppression : {str(e)}"
         )

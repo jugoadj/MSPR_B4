@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'produit-ms'
+    static_configs:
+      - targets: ['produit-ms:8000']
