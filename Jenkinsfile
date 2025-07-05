@@ -112,6 +112,7 @@ pipeline {
             steps {
                 sh """
                     docker build -t ${DOCKER_IMAGE} .
+                    docker tag ${DOCKER_IMAGE} ${DOCKER_REGISTRY}/${DOCKER_IMAGE}
                     docker tag ${DOCKER_IMAGE} ${DOCKER_REGISTRY}/jugo835/produit-ms:latest
                 """
             }
@@ -132,7 +133,7 @@ pipeline {
                             docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD} ${DOCKER_REGISTRY}
                             
                             # Push des images
-                            docker push ${DOCKER_REGISTRY}/jugo835/produit-ms:${env.BUILD_NUMBER}
+                            docker push ${DOCKER_REGISTRY}/${DOCKER_IMAGE}
                             docker push ${DOCKER_REGISTRY}/jugo835/produit-ms:latest
                             
                             # Nettoyage
@@ -193,16 +194,15 @@ pipeline {
                 }
             }
         }
-    }
-    stage('Deploy to Docker Desktop') {
+
+        // Étape 8: Déploiement sur Docker Desktop
+        stage('Deploy to Docker Desktop') {
             agent any
             environment {
                 DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@prod-postgres:5432/${POSTGRES_DB}"
             }
             steps {
                 script {
-                    // Cette commande SSH serait exécutée sur votre machine locale
-                    // Vous devez configurer l'accès SSH entre Jenkins et votre machine
                     sshagent(['your-ssh-credentials']) {
                         sh """
                             ssh -o StrictHostKeyChecking=no user@your-local-ip << 'ENDSSH'
@@ -230,7 +230,7 @@ pipeline {
                             
                             # Téléchargement de la dernière image
                             docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD} ${DOCKER_REGISTRY}
-                            docker pull ${DOCKER_REGISTRY}/${DOCKER_IMAGE}
+                            docker pull ${DOCKER_REGISTRY}/jugo835/produit-ms:latest
                             docker logout
                             
                             # Lancement de l'application
@@ -239,7 +239,7 @@ pipeline {
                                 --network produit-network \\
                                 -p 8000:8000 \\
                                 -e DATABASE_URL=${DATABASE_URL} \\
-                                ${DOCKER_REGISTRY}/${DOCKER_IMAGE}
+                                ${DOCKER_REGISTRY}/jugo835/produit-ms:latest
                             
                             # Vérification
                             sleep 5
@@ -257,25 +257,18 @@ pipeline {
     post {
         always {
             script {
-                node {
-                    try {
-                        sh '''
-                        echo "Nettoyage des ressources Docker..."
-                        docker stop produit-ms || echo "Le container produit-ms n'existe pas ou est déjà arrêté"
-                        docker rm produit-ms || echo "Le container produit-ms n'existe pas"
-                        docker stop prod-postgres || echo "Le container prod-postgres n'existe pas ou est déjà arrêté"
-                        docker rm prod-postgres || echo "Le container prod-postgres n'existe pas"
-                        docker network rm produit-network || echo "Le réseau produit-network n'existe pas"
-                        docker logout || echo "Logout Docker non nécessaire"
-                        echo "Nettoyage terminé avec succès"
-                        '''
-                    } catch (Exception e) {
-                        echo "Erreur lors du nettoyage: ${e.message}"
-                    }
-                }
+                echo "Nettoyage des ressources locales..."
+                sh '''
+                    docker stop test-postgres || true
+                    docker rm test-postgres || true
+                    docker stop produit-ms || true
+                    docker rm produit-ms || true
+                    docker stop prod-postgres || true
+                    docker rm prod-postgres || true
+                    docker network rm produit-network || true
+                '''
+                echo "Nettoyage terminé"
             }
         }
     }
-
-
 }
