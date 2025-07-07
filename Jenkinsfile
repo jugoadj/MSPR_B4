@@ -67,27 +67,29 @@ pipeline {
 
         // Étape 3: Construction et tests
         stage('🧪 Tests Unitaires') {
-      steps {
-        bat '''
-          docker run --rm ^
-            -e ORDER_DB_URL="sqlite:///:memory:" ^
-            -v "%WORKSPACE%":/app ^
-            -w /app ^
-            python:3.11-slim ^
-            sh -c "pip install --upgrade pip && \
-                   pip install -r requirements.txt && \
-                   pytest --maxfail=1 --disable-warnings -q --junitxml=results.xml"
-        '''
-      }
-      post {
-        always {
-          junit 'results.xml'
-        }
-        failure {
-          echo '❌ Les tests ont échoué !'
-        }
-      }
-    }
+            agent any
+
+            steps {
+                bat '''
+                docker run --rm ^
+                    -e ORDER_DB_URL="sqlite:///:memory:" ^
+                    -v "%WORKSPACE%":/app ^
+                    -w /app ^
+                    python:3.11-slim ^
+                    sh -c "pip install --upgrade pip && \
+                        pip install -r requirements.txt && \
+                        pytest --maxfail=1 --disable-warnings -q --junitxml=results.xml"
+                '''
+            }
+            post {
+                always {
+                junit 'results.xml'
+                }
+                failure {
+                echo '❌ Les tests ont échoué !'
+                }
+            }
+            }
 
         // Étape 4: Arrêt de PostgreSQL de test
         stage('Stop Test PostgreSQL') {
