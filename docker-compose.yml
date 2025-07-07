@@ -1,11 +1,35 @@
 version: '3'
 services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"  # Port AMQP pour les connexions client
+      - "15672:15672"  # Port de l'interface web de gestion
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin
+    networks:
+      - monitoring-net
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   produit-ms:
     image: jugo835/produit-ms:latest
     ports:
       - "8000:8000"
     environment:
       - ENV=dev
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=admin
+      - RABBITMQ_VHOST=/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     networks:
       - monitoring-net
 

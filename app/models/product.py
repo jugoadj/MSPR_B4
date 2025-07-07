@@ -12,8 +12,6 @@ class Product(Base):
     description = Column(String)
     stock = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-
     prices = relationship(
         "Price",
         back_populates="product",
