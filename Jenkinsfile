@@ -65,28 +65,28 @@ pipeline {
             }
         }
 
-        // Étape 3: Construction et tests
         stage('Build & Test') {
             agent {
                 docker {
                     image 'python:3.11-slim'
-                    args '-u root --network=host'
+                    args '-u root'
                     reuseNode true
                 }
             }
             environment {
-                DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
+                DATABASE_URL = "sqlite:///:memory:"
             }
             steps {
                 sh '''
                     pip install --no-cache-dir --upgrade pip
-                    
-                    # Forcer la désinstallation de la lib au cas où une ancienne version serait préinstallée
+
+                    # Forcer la désinstallation de certaines libs au besoin
                     pip uninstall -y prometheus-fastapi-instrumentator || true
-                    
-                    # Installer toutes les dépendances avec la bonne version
-                    pip install --no-cache-dir -r requirements.txt pytest pytest-cov psycopg2-binary
-                    
+
+                    # Installer toutes les dépendances
+                    pip install --no-cache-dir -r requirements.txt pytest pytest-cov
+
+                    # Lancer les tests
                     pytest --cov=app --junitxml=test-results.xml -v tests/
                 '''
             }
@@ -98,6 +98,7 @@ pipeline {
                 }
             }
         }
+
 
         // Étape 4: Arrêt de PostgreSQL de test
         stage('Stop Test PostgreSQL') {
