@@ -150,9 +150,6 @@ pipeline {
 
         // Étape 7: Déploiement en dev
         stage('Deploy to Dev') {
-            when {
-                branch 'main'
-            }
             agent any
             environment {
                 DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@prod-postgres:5432/${POSTGRES_DB}"
