@@ -151,9 +151,7 @@ pipeline {
 
                 // Étape 6.5: Pull de l'image sur Docker Desktop
         stage('Pull on Docker Desktop') {
-            when {
-                branch 'main'
-            }
+
             agent any
             steps {
                 script {
