@@ -2,16 +2,17 @@ import os
 import pika
 import json
 from dotenv import load_dotenv, find_dotenv
+from ..config.settings import RABBITMQ_URL
 
-# Charge automatiquement le premier .env
-load_dotenv(find_dotenv())
 
-RABBIT_URL = os.getenv("RABBITMQ_URL")
+# # Charge automatiquement le premier .env
+# load_dotenv(find_dotenv())
 
-params = pika.URLParameters(RABBIT_URL)
+
+params = pika.URLParameters(RABBITMQ_URL)
 
 # Fonction de publication : connexion établie à chaque appel
-def publish_client(client: dict):
+def publish_product(product: dict):
     # Crée une connexion et un canal à la demande
     connection = pika.BlockingConnection(params)
     channel = connection.channel()
@@ -19,7 +20,8 @@ def publish_client(client: dict):
     channel.basic_publish(
         exchange="produits",
         routing_key="",
-        body=json.dumps(client),
+        body=json.dumps(product, default=str),
+
         properties=pika.BasicProperties(content_type='application/json')
     )
     connection.close()

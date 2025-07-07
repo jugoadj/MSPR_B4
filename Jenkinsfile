@@ -6,11 +6,6 @@ pipeline {
         DOCKER_IMAGE = "jugo835/produit-ms:${env.BUILD_NUMBER}"
         DOCKER_REGISTRY = "docker.io"
         
-        // Configuration PostgreSQL
-        POSTGRES_USER = "testuser"
-        POSTGRES_PASSWORD = "testpassword"
-        POSTGRES_DB = "testdb"
-        
         // Credentials Docker Hub
         DOCKER_CREDS = credentials('docker-hub-creds')
     }
@@ -28,54 +23,17 @@ pipeline {
             }
         }
 
-        // Étape 2: Lancement PostgreSQL pour les tests
-        stage('Start Test PostgreSQL') {
-            agent any
-            steps {
-                script {
-                    sh '''
-                        # Nettoyage des anciens containers
-                        docker stop test-postgres || true
-                        docker rm test-postgres || true
-
-                        # Lancement du container PostgreSQL
-                        docker run -d \
-                            --name test-postgres \
-                            -e POSTGRES_USER=${POSTGRES_USER} \
-                            -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
-                            -e POSTGRES_DB=${POSTGRES_DB} \
-                            -p 5432:5432 \
-                            postgres:15
-
-                        # Attente que PostgreSQL soit prêt
-                        echo "Waiting for PostgreSQL to be ready..."
-                        for i in {1..15}; do
-                            if docker exec test-postgres pg_isready -U ${POSTGRES_USER}; then
-                                break
-                            fi
-                            echo "PostgreSQL is not ready yet, sleeping..."
-                            sleep 2
-                        done
-
-                        # Vérification finale
-                        docker exec test-postgres pg_isready -U ${POSTGRES_USER} || \
-                            (echo "PostgreSQL did not start properly." && exit 1)
-                    '''
-                }
-            }
-        }
-
-        // Étape 3: Construction et tests
+        // Étape 2: Construction et tests avec SQLite en mémoire
         stage('Build & Test') {
             agent {
                 docker {
                     image 'python:3.11-slim'
-                    args '-u root --network=host'
+                    args '-u root'
                     reuseNode true
                 }
             }
             environment {
-                DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
+                DATABASE_URL = "sqlite:///:memory:"
             }
             steps {
                 sh '''
@@ -85,7 +43,7 @@ pipeline {
                     pip uninstall -y prometheus-fastapi-instrumentator || true
                     
                     # Installer toutes les dépendances avec la bonne version
-                    pip install --no-cache-dir -r requirements.txt pytest pytest-cov psycopg2-binary
+                    pip install --no-cache-dir -r requirements.txt pytest pytest-cov
                     
                     pytest --cov=app --junitxml=test-results.xml -v tests/
                 '''
@@ -99,18 +57,7 @@ pipeline {
             }
         }
 
-        // Étape 4: Arrêt de PostgreSQL de test
-        stage('Stop Test PostgreSQL') {
-            agent any
-            steps {
-                sh '''
-                    docker stop test-postgres || true
-                    docker rm test-postgres || true
-                '''
-            }
-        }
-
-        // Étape 5: Construction de l'image Docker
+        // Étape 3: Construction de l'image Docker
         stage('Build Docker Image') {
             agent any
             steps {
@@ -122,7 +69,7 @@ pipeline {
             }
         }
 
-        // Étape 6: Push vers Docker Hub
+        // Étape 4: Push vers Docker Hub
         stage('Push to Docker Hub') {
             agent any
             steps {
@@ -148,14 +95,14 @@ pipeline {
             }
         }
 
-        // Étape 7: Déploiement en dev
+        // Étape 5: Déploiement en dev
         stage('Deploy to Dev') {
             when {
                 branch 'main'
             }
             agent any
             environment {
-                DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@prod-postgres:5432/${POSTGRES_DB}"
+                DATABASE_URL = "sqlite:///./prod.db"
             }
             steps {
                 script {
@@ -163,29 +110,10 @@ pipeline {
                         # Nettoyage des anciens containers
                         docker stop produit-ms || true
                         docker rm produit-ms || true
-                        docker stop prod-postgres || true
-                        docker rm prod-postgres || true
-                        
-                        # Création du réseau
-                        docker network create produit-network || true
-                        
-                        # Lancement de PostgreSQL de production
-                        docker run -d \
-                            --name prod-postgres \
-                            --network produit-network \
-                            -e POSTGRES_USER=${POSTGRES_USER} \
-                            -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
-                            -e POSTGRES_DB=${POSTGRES_DB} \
-                            -p 5433:5432 \
-                            postgres:15
-                        
-                        # Attente que PostgreSQL soit prêt
-                        sleep 10
                         
                         # Lancement de l'application
                         docker run -d \
                             --name produit-ms \
-                            --network produit-network \
                             -p 8000:8000 \
                             -e DATABASE_URL=${DATABASE_URL} \
                             ${DOCKER_REGISTRY}/jugo835/produit-ms:latest
@@ -198,7 +126,8 @@ pipeline {
                 }
             }
         }
-                // Étape 6.5: Pull de l'image sur Docker Desktop
+        
+        // Étape 6: Pull de l'image sur Docker Desktop
         stage('Pull on Docker Desktop') {
             when {
                 branch 'main'
@@ -227,8 +156,6 @@ pipeline {
         }
     }
 
-        
-
     post {
         always {
             script {
@@ -238,9 +165,6 @@ pipeline {
                         echo "Nettoyage des ressources Docker..."
                         docker stop produit-ms || echo "Le container produit-ms n'existe pas ou est déjà arrêté"
                         docker rm produit-ms || echo "Le container produit-ms n'existe pas"
-                        docker stop prod-postgres || echo "Le container prod-postgres n'existe pas ou est déjà arrêté"
-                        docker rm prod-postgres || echo "Le container prod-postgres n'existe pas"
-                        docker network rm produit-network || echo "Le réseau produit-network n'existe pas"
                         docker logout || echo "Logout Docker non nécessaire"
                         echo "Nettoyage terminé avec succès"
                         '''

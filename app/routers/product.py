@@ -6,6 +6,10 @@ from ..models.product import Product as ProductModel
 from ..models.price import Price as PriceModel
 from ..config.schemas import ProductCreate, ProductResponse, PriceCreate, ProductUpdate
 from sqlalchemy.exc import SQLAlchemyError
+from .rabbitmq import publish_product
+
+
+
 
 router = APIRouter(
     prefix="/products",
@@ -16,6 +20,8 @@ router = APIRouter(
         403: {"description": "Opération non permise"}
     }
 )
+
+
 
 @router.post(
     "/",
@@ -56,6 +62,7 @@ def create_product(
         db.commit()
         db.refresh(db_product)
 
+        # Crée les prix
         for price in product_data.prices:
             db_price = PriceModel(
                 amount=price.amount,
@@ -65,7 +72,15 @@ def create_product(
 
         db.commit()
         db.refresh(db_product)
-        return ProductResponse.model_validate(db_product)
+
+        # On recharge le produit avec les prix
+        db.refresh(db_product)
+        product_with_prices = db.query(ProductModel).options(joinedload(ProductModel.prices)).filter(ProductModel.id == db_product.id).first()
+
+        # Envoie le message à RabbitMQ
+        publish_product(ProductResponse.model_validate(product_with_prices).model_dump())
+
+        return ProductResponse.model_validate(product_with_prices)
 
     except SQLAlchemyError as e:
         db.rollback()
@@ -182,6 +197,12 @@ def update_product(
 
         db.commit()
         db.refresh(product)
+        # Recharge avec les prix mis à jour
+        product = db.query(ProductModel).options(joinedload(ProductModel.prices)).filter(ProductModel.id == product_id).first()
+
+        # Envoie à RabbitMQ
+        publish_product(ProductResponse.model_validate(product).model_dump())
+
         return ProductResponse.model_validate(product)
 
     except SQLAlchemyError as e:

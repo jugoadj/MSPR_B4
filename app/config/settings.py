@@ -14,3 +14,4 @@ RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))     # 5672 par défaut
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "admin")       # "guest" par défaut
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "admin") # "guest" par défaut
 RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", "/")         # "/" par défaut
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://admin:admin@localhost:5672/")

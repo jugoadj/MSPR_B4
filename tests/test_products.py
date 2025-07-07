@@ -8,6 +8,7 @@ from app.config.database import Base, get_db
 # Configuration de la base de données de test
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
+
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )

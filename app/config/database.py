@@ -21,10 +21,10 @@ def test_connection():
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-            print("✅ Connexion à la base de données réussie.")
+            print("Connexion à la base de données réussie.")
         return True
     except Exception as e:
-        print(f"❌ Erreur de connexion : {e}")
+        print(f"Erreur de connexion : {e}")
         return False
 
 # Test automatique seulement si exécuté directement
