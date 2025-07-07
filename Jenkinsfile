@@ -65,39 +65,41 @@ pipeline {
             }
         }
 
-        stage('Build & Test') {
-            agent {
-                docker {
-                    image 'python:3.11-slim'
-                    args '-u root'
-                    reuseNode true
-                }
-            }
-            environment {
-                DATABASE_URL = "sqlite:///:memory:"
-            }
-            steps {
-                sh '''
-                    pip install --no-cache-dir --upgrade pip
-
-                    # Forcer la désinstallation de certaines libs au besoin
-                    pip uninstall -y prometheus-fastapi-instrumentator || true
-
-                    # Installer toutes les dépendances
-                    pip install --no-cache-dir -r requirements.txt pytest pytest-cov
-
-                    # Lancer les tests
-                    pytest --cov=app --junitxml=test-results.xml -v tests/
-                '''
-            }
-
-            post {
-                always {
-                    junit 'test-results.xml'
-                    archiveArtifacts artifacts: 'test-results.xml', allowEmptyArchive: true
-                }
+    stage('Build & Test') {
+        agent {
+            docker {
+                image 'python:3.11-slim'
+                args '-u root'
+                reuseNode true
             }
         }
+        environment {
+            DATABASE_URL = "sqlite:///:memory:"
+        }
+        steps {
+            sh '''
+                pip install --no-cache-dir --upgrade pip
+
+                # Forcer la désinstallation de certaines libs au besoin
+                pip uninstall -y prometheus-fastapi-instrumentator || true
+
+                # Installer toutes les dépendances
+                pip install --no-cache-dir -r requirements.txt pytest pytest-cov
+
+                # Lancer les tests
+                pytest 
+                
+                --cov=app --junitxml=test-results.xml -v tests/
+            '''
+        }
+
+        post {
+            always {
+                junit 'test-results.xml'
+                archiveArtifacts artifacts: 'test-results.xml', allowEmptyArchive: true
+            }
+        }
+    }
 
 
         // Étape 4: Arrêt de PostgreSQL de test

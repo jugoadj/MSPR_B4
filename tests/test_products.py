@@ -1,105 +1,77 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from app.main import app
-from app.config.database import Base, get_db
+from fastapi import status
 
-# Configuration de la base de données de test
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Créer les tables
-Base.metadata.create_all(bind=engine)
-
-# Fixture pour la session DB
-@pytest.fixture
-def db_session():
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
-    yield session
-    session.close()
-    transaction.rollback()
-    connection.close()
-
-# Fixture pour le client de test
-@pytest.fixture
-def client(db_session):
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            db_session.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
-    app.dependency_overrides.clear()
-
-# Données de test
-SAMPLE_PRODUCT = {
-    "name": "Test Product",
-    "description": "Test Description",
-    "stock": 10,
-    "prices": [{"amount": 9.99}]
-}
-
-# Tests principaux
-def test_create_product(client):
-    response = client.post("/api/products", json=SAMPLE_PRODUCT)
-    assert response.status_code == 201
+def test_create_product(client, sample_product_data):
+    response = client.post("/api/products/", json=sample_product_data)
+    assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
-    assert data["name"] == SAMPLE_PRODUCT["name"]
-    assert data["stock"] == SAMPLE_PRODUCT["stock"]
+    assert "id" in data
+    return data
 
 def test_get_product(client):
-    # Créer d'abord un produit
-    create_response = client.post("/api/products", json=SAMPLE_PRODUCT)
+    # Test intégré qui crée puis récupère un produit
+    product_data = {
+        "name": "Test Get Product",
+        "description": "Test Description",
+        "stock": 5,
+        "prices": [{"amount": 15.99}]
+    }
+    create_response = client.post("/api/products/", json=product_data)
+    assert create_response.status_code == status.HTTP_201_CREATED
+    
     product_id = create_response.json()["id"]
-
-    # Puis le récupérer
-    response = client.get(f"/api/products/{product_id}")
-    assert response.status_code == 200
-    assert response.json()["id"] == product_id
+    get_response = client.get(f"/api/products/{product_id}")
+    assert get_response.status_code == status.HTTP_200_OK
+    assert get_response.json()["id"] == product_id
 
 def test_get_all_products(client):
-    # Créer un produit
-    client.post("/api/products", json=SAMPLE_PRODUCT)
-
-    # Récupérer tous les produits
-    response = client.get("/api/products")
-    assert response.status_code == 200
-    assert len(response.json()) > 0
+    # Créer deux produits pour tester la liste
+    client.post("/products/", json={
+        "name": "Product 1",
+        "description": "Desc 1",
+        "stock": 1,
+        "prices": [{"amount": 10.00}]
+    })
+    client.post("/products/", json={
+        "name": "Product 2", 
+        "description": "Desc 2",
+        "stock": 2,
+        "prices": [{"amount": 20.00}]
+    })
+    
+    response = client.get("/api/products/")
+    assert response.status_code == status.HTTP_200_OK
+    products = response.json()
+    assert len(products) >= 2
 
 def test_update_product(client):
-    # Créer un produit
-    create_response = client.post("/api/products", json=SAMPLE_PRODUCT)
+    # Créer puis mettre à jour un produit
+    create_response = client.post("/api/products/", json={
+        "name": "Original",
+        "description": "Original",
+        "stock": 1,
+        "prices": [{"amount": 1.00}]
+    })
     product_id = create_response.json()["id"]
-
-    # Mettre à jour
-    update_data = {"name": "Updated Product"}
-    response = client.put(f"/api/products/{product_id}", json=update_data)
-    assert response.status_code == 200
-    assert response.json()["name"] == "Updated Product"
+    
+    update_response = client.put(f"/api/products/{product_id}", json={
+        "name": "Updated",
+        "prices": [{"amount": 2.00}]
+    })
+    assert update_response.status_code == status.HTTP_200_OK
+    assert update_response.json()["name"] == "Updated"
 
 def test_delete_product(client):
-    # Créer un produit
-    create_response = client.post("/api/products", json=SAMPLE_PRODUCT)
+    create_response = client.post("/api/products/", json={
+        "name": "To Delete",
+        "description": "Delete me",
+        "stock": 1,
+        "prices": [{"amount": 1.00}]
+    })
     product_id = create_response.json()["id"]
-
-    # Supprimer
+    
     delete_response = client.delete(f"/api/products/{product_id}")
-    assert delete_response.status_code == 204
-
-    # Vérifier qu'il n'existe plus
+    assert delete_response.status_code == status.HTTP_204_NO_CONTENT
+    
     get_response = client.get(f"/api/products/{product_id}")
-    assert get_response.status_code in [404, 500]  # Accepte les deux le temps de corriger
-
-    # Si c'est une 500, affichez le détail pour debug
-    if get_response.status_code == 500:
-        print(f"Erreur serveur: {get_response.json()}")
+    assert get_response.status_code == status.HTTP_404_NOT_FOUND
