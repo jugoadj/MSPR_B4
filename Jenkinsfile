@@ -66,30 +66,40 @@ pipeline {
         }
 
         // Étape 3: Construction et tests
-        stage('🧪 Tests Unitaires') {
-            agent any
-
+        stage('Build & Test') {
+            agent {
+                docker {
+                    image 'python:3.11-slim'
+                    args '-u root'
+                    reuseNode true
+                }
+            }
+            environment {
+                DATABASE_URL = "sqlite:///:memory:"
+            }
             steps {
-                bat '''
-                docker run --rm ^
-                    -e ORDER_DB_URL="sqlite:///:memory:" ^
-                    -v "%WORKSPACE%":/app ^
-                    -w /app ^
-                    python:3.11-slim ^
-                    sh -c "pip install --upgrade pip && \
-                        pip install -r requirements.txt && \
-                        pytest --maxfail=1 --disable-warnings -q --junitxml=results.xml"
+                sh '''
+                    pip install --no-cache-dir --upgrade pip
+
+                    # Forcer la désinstallation de certaines libs au besoin
+                    pip uninstall -y prometheus-fastapi-instrumentator || true
+
+                    # Installer toutes les dépendances
+                    pip install --no-cache-dir -r requirements.txt pytest pytest-cov
+
+                    # Lancer les tests
+                    pytest --cov=app --junitxml=test-results.xml -v tests/
                 '''
             }
+
             post {
                 always {
-                junit 'results.xml'
-                }
-                failure {
-                echo '❌ Les tests ont échoué !'
+                    junit 'test-results.xml'
+                    archiveArtifacts artifacts: 'test-results.xml', allowEmptyArchive: true
                 }
             }
-            }
+        }
+
 
         // Étape 4: Arrêt de PostgreSQL de test
         stage('Stop Test PostgreSQL') {
