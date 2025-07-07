@@ -66,38 +66,28 @@ pipeline {
         }
 
         // Étape 3: Construction et tests
-        stage('Build & Test') {
-            agent {
-                docker {
-                    image 'python:3.11-slim'
-                    args '-u root --network=host'
-                    reuseNode true
-                }
-            }
-            environment {
-                DATABASE_URL = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
-            }
-            steps {
-                sh '''
-                    pip install --no-cache-dir --upgrade pip
-                    
-                    # Forcer la désinstallation de la lib au cas où une ancienne version serait préinstallée
-                    pip uninstall -y prometheus-fastapi-instrumentator || true
-                    
-                    # Installer toutes les dépendances avec la bonne version
-                    pip install --no-cache-dir -r requirements.txt pytest pytest-cov psycopg2-binary
-                    
-                    pytest --cov=app --junitxml=test-results.xml -v tests/
-                '''
-            }
-
-            post {
-                always {
-                    junit 'test-results.xml'
-                    archiveArtifacts artifacts: 'test-results.xml', allowEmptyArchive: true
-                }
-            }
+        stage('🧪 Tests Unitaires') {
+      steps {
+        bat '''
+          docker run --rm ^
+            -e ORDER_DB_URL="sqlite:///:memory:" ^
+            -v "%WORKSPACE%\Product-service":/app ^
+            -w /app ^
+            python:3.11-slim ^
+            sh -c "pip install --upgrade pip && \
+                   pip install -r requirements.txt && \
+                   pytest --maxfail=1 --disable-warnings -q --junitxml=results.xml"
+        '''
+      }
+      post {
+        always {
+          junit 'Product-service/results.xml'
         }
+        failure {
+          echo '❌ Les tests ont échoué !'
+        }
+      }
+    }
 
         // Étape 4: Arrêt de PostgreSQL de test
         stage('Stop Test PostgreSQL') {
