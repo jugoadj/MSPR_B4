@@ -71,7 +71,7 @@ pipeline {
         bat '''
           docker run --rm ^
             -e ORDER_DB_URL="sqlite:///:memory:" ^
-            -v "%WORKSPACE%\Product-service":/app ^
+            -v "%WORKSPACE%":/app ^
             -w /app ^
             python:3.11-slim ^
             sh -c "pip install --upgrade pip && \
@@ -81,7 +81,7 @@ pipeline {
       }
       post {
         always {
-          junit 'Product-service/results.xml'
+          junit 'results.xml'
         }
         failure {
           echo '❌ Les tests ont échoué !'
