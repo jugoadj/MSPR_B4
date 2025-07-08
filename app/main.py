@@ -22,6 +22,3 @@ Instrumentator().instrument(app).expose(app)
 
 
 
-def init_db():
-    """Fonction à appeler manuellement pour créer les tables."""
-    Base.metadata.create_all(bind=engine)

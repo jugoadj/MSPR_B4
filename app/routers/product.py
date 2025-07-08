@@ -74,7 +74,6 @@ def create_product(
         db.refresh(db_product)
 
         # On recharge le produit avec les prix
-        db.refresh(db_product)
         product_with_prices = db.query(ProductModel).options(joinedload(ProductModel.prices)).filter(ProductModel.id == db_product.id).first()
 
         # Envoie le message à RabbitMQ
